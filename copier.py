@@ -191,9 +191,8 @@ class TelegramPostCopier:
             # Отправка в целевой канал
             await self.client.send_file(
                 self.target_entity,
-                processed_photo,
-                caption=text,
-                file=BytesIO(processed_photo)
+                BytesIO(processed_photo),
+                caption=text
             )
             
         except Exception as e:
