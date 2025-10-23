@@ -225,6 +225,13 @@ class LLMClient:
             provider = OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com")
             if self._test_provider(provider):
                 self.providers.append(provider)
+        
+        # xAI Grok - платно, если есть баланс
+        if hasattr(Config, 'XAI_API_KEY') and Config.XAI_API_KEY:
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'xai') else "grok-beta"
+            provider = OpenAIProvider("xAI Grok", Config.XAI_API_KEY, model, "https://api.x.ai/v1")
+            if self._test_provider(provider):
+                self.providers.append(provider)
     
     def _test_provider(self, provider: LLMProvider) -> bool:
         """Тестирование провайдера простым запросом"""
