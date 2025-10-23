@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # 🤖 Основной сервис копировщика
+  copier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram-post-copier
+    restart: unless-stopped
+    
+    # Переменные окружения из файла
+    env_file:
+      - .env
+    
+    # Volumes для персистентности
+    volumes:
+      # Сессия Telegram (важно для сохранения авторизации)
+      - ./copier_session.session:/app/copier_session.session
+      - ./copier_session.session-journal:/app/copier_session.session-journal
+      # Логи
+      - ./logs:/app/logs
+      # Временные файлы
+      - ./temp:/app/temp
+      - ./processed_images:/app/processed_images
+    
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Лимиты ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    # Сетевые настройки
+    networks:
+      - telegram-network
+
+networks:
+  telegram-network:
+    driver: bridge
+

@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Session files (будут подключены через volume)
+*.session
+*.session-journal
+
+# Временные файлы
+temp/
+tmp/
+processed_images/
+
+# Documentation
+README.md
+docs/
+*.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Environment
+.env
+.env.*
+!.env.example
+

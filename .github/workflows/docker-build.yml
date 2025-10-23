@@ -1,0 +1,53 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+    
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: 🔨 Build Docker image
+      run: docker-compose build
+    
+    - name: ✅ Test Docker image
+      run: |
+        docker-compose config
+        echo "Docker image built successfully!"
+    
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black
+        pip install -r requirements.txt
+    
+    - name: 🔍 Lint with flake8
+      run: |
+        flake8 *.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 *.py --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+    
+    - name: ✨ Check formatting with black
+      run: black --check *.py
+
