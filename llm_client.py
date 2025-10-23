@@ -180,10 +180,10 @@ class LLMClient:
         self.providers = [p for p in self.providers if p.is_available]
         
         if not self.providers:
-            logger.error("❌ Ни один LLM провайдер не доступен! Проверьте API ключи в .env")
-            raise ValueError("Нет доступных LLM провайдеров")
-        
-        logger.info(f"✅ Доступные LLM провайдеры: {[p.name for p in self.providers]}")
+            logger.warning("⚠️ Ни один LLM провайдер не настроен. Бот будет копировать посты БЕЗ AI обработки.")
+            logger.warning("⚠️ Для AI обработки пополните DeepSeek: https://platform.deepseek.com")
+        else:
+            logger.info(f"✅ Доступные LLM провайдеры: {[p.name for p in self.providers]}")
     
     def _initialize_providers(self):
         """Инициализация всех провайдеров"""

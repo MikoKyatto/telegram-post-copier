@@ -73,7 +73,7 @@ class Config:
         if not cls.TARGET_CHANNEL:
             errors.append("❌ TARGET_CHANNEL не установлен")
             
-        # Проверка наличия хотя бы одного API ключа для LLM
+        # LLM опционально - бот может работать без AI
         has_llm_key = any([
             cls.OPENAI_API_KEY,
             cls.DEEPSEEK_API_KEY,
@@ -84,7 +84,8 @@ class Config:
         ])
         
         if not has_llm_key:
-            errors.append("❌ Не установлен ни один LLM API ключ (OPENAI/DEEPSEEK/XAI/GOOGLE/COHERE/HUGGINGFACE)")
+            # Предупреждение, но не ошибка - бот может копировать без AI
+            pass
             
         return errors
 
