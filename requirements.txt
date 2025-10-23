@@ -9,9 +9,9 @@ numpy==1.26.4
 
 # 🧠 AI/LLM интеграция
 openai>=1.40.0
-google-generativeai>=0.7.0
-cohere>=5.0.0
+google-generativeai>=0.8.0
 huggingface-hub>=0.20.0
+groq>=0.4.0
 requests==2.31.0
 
 # ⚙️ Утилиты

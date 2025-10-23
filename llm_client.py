@@ -188,17 +188,63 @@ class LLMClient:
     def _initialize_providers(self):
         """Инициализация всех провайдеров"""
         
-        # Только ПРОВЕРЕННЫЕ рабочие модели
+        # АКТУАЛЬНЫЕ бесплатные модели (проверено)
         default_models = {
             "deepseek": "deepseek-chat",
+            "groq": "llama3-8b-8192",  # Groq - БЕСПЛАТНО и быстро!
+            "google": "gemini-1.5-flash",
+            "huggingface": "mistralai/Mistral-7B-Instruct-v0.2"
         }
         
         use_custom_model = Config.LLM_MODEL != 'auto' and Config.LLM_PROVIDER != 'auto'
         
-        # DeepSeek - РАБОТАЕТ, если есть баланс
-        if Config.DEEPSEEK_API_KEY:
+        # GROQ - БЕСПЛАТНО, быстро! (groq.com)
+        if hasattr(Config, 'GROQ_API_KEY') and Config.GROQ_API_KEY:
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'groq') else default_models["groq"]
+            provider = OpenAIProvider("Groq", Config.GROQ_API_KEY, model, "https://api.groq.com/openai/v1")
+            if self._test_provider(provider):
+                self.providers.append(provider)
+        
+        # Google Gemini - БЕСПЛАТНО 60 req/min
+        if hasattr(Config, 'GOOGLE_API_KEY') and Config.GOOGLE_API_KEY:
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'google') else default_models["google"]
+            provider = GoogleGeminiProvider("Google Gemini", Config.GOOGLE_API_KEY, model)
+            if self._test_provider(provider):
+                self.providers.append(provider)
+        
+        # HuggingFace - БЕСПЛАТНО
+        if hasattr(Config, 'HUGGINGFACE_API_KEY') and Config.HUGGINGFACE_API_KEY:
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'huggingface') else default_models["huggingface"]
+            provider = HuggingFaceProvider("HuggingFace", Config.HUGGINGFACE_API_KEY, model)
+            if self._test_provider(provider):
+                self.providers.append(provider)
+        
+        # DeepSeek - дешево ($0.14/1M), если есть баланс
+        if hasattr(Config, 'DEEPSEEK_API_KEY') and Config.DEEPSEEK_API_KEY:
             model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'deepseek') else default_models["deepseek"]
-            self.providers.append(OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com"))
+            provider = OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com")
+            if self._test_provider(provider):
+                self.providers.append(provider)
+    
+    def _test_provider(self, provider: LLMProvider) -> bool:
+        """Тестирование провайдера простым запросом"""
+        try:
+            logger.info(f"🧪 Тестирование {provider.name}...")
+            test_result = provider.generate(
+                "Say 'OK' if you work",
+                "",
+                0.1,
+                10
+            )
+            if test_result and len(test_result.strip()) > 0:
+                logger.info(f"✅ {provider.name}: РАБОТАЕТ")
+                return True
+            else:
+                logger.warning(f"❌ {provider.name}: пустой ответ")
+                return False
+        except Exception as e:
+            logger.warning(f"❌ {provider.name}: не прошел тест ({str(e)[:100]})")
+            return False
     
     def _generate_with_fallback(self, prompt: str, system_prompt: str = "", temperature: float = None, max_tokens: int = 1000) -> Optional[str]:
         """Генерация с автоматическим переключением между провайдерами"""
