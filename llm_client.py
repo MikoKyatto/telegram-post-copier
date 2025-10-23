@@ -64,13 +64,15 @@ class OpenAIProvider(LLMProvider):
 class GoogleGeminiProvider(LLMProvider):
     """Google AI Studio (Gemini)"""
     
-    def __init__(self, name: str, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, name: str, api_key: str, model: str = "gemini-1.5-flash-latest"):
         super().__init__(name, api_key, model)
         if self.is_available:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                self.client = genai.GenerativeModel(model)
+                # Убираем префикс models/ если есть
+                clean_model = model.replace("models/", "")
+                self.client = genai.GenerativeModel(clean_model)
             except Exception as e:
                 logger.warning(f"⚠️ {name}: Не удалось инициализировать клиент: {e}")
                 self.is_available = False
@@ -158,7 +160,14 @@ class HuggingFaceProvider(LLMProvider):
             if response.status_code == 200:
                 result = response.json()
                 if isinstance(result, list) and len(result) > 0:
-                    return result[0].get("generated_text", "").strip()
+                    generated = result[0].get("generated_text", "").strip()
+                    if generated:
+                        return generated
+                    logger.warning(f"⚠️ {self.name}: Пустой generated_text в ответе")
+                else:
+                    logger.warning(f"⚠️ {self.name}: Некорректный формат ответа: {result}")
+            else:
+                logger.warning(f"⚠️ {self.name}: HTTP {response.status_code}: {response.text[:200]}")
             return None
         except Exception as e:
             logger.warning(f"⚠️ {self.name}: Ошибка генерации: {e}")
@@ -188,12 +197,12 @@ class LLMClient:
     def _initialize_providers(self):
         """Инициализация всех провайдеров"""
         
-        # АКТУАЛЬНЫЕ бесплатные модели (проверено)
+        # АКТУАЛЬНЫЕ бесплатные модели (октябрь 2025)
         default_models = {
             "deepseek": "deepseek-chat",
-            "groq": "llama3-8b-8192",  # Groq - БЕСПЛАТНО и быстро!
-            "google": "gemini-1.5-flash",
-            "huggingface": "mistralai/Mistral-7B-Instruct-v0.2"
+            "groq": "llama-3.1-8b-instant",  # Обновлено! Старая llama3-8b-8192 удалена
+            "google": "gemini-1.5-flash-latest",  # -latest для актуальной версии
+            "huggingface": "microsoft/Phi-3-mini-4k-instruct"  # Быстрая и бесплатная модель
         }
         
         use_custom_model = Config.LLM_MODEL != 'auto' and Config.LLM_PROVIDER != 'auto'
