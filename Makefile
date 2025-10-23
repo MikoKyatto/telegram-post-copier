@@ -36,8 +36,17 @@ docker-build: ## Сборка Docker образа
 	@echo "$(GREEN)🐳 Сборка Docker образа...$(NC)"
 	docker-compose build
 
+docker-auth: ## Первая авторизация в Telegram (Docker)
+	@echo "$(GREEN)🔐 Запуск первой авторизации...$(NC)"
+	bash first-auth.sh
+
 docker-up: ## Запуск Docker контейнера
 	@echo "$(GREEN)🐳 Запуск Docker контейнера...$(NC)"
+	@if [ ! -f copier_session.session ]; then \
+		echo "$(RED)❌ Session файл не найден!$(NC)"; \
+		echo "$(YELLOW)Выполните сначала: make docker-auth$(NC)"; \
+		exit 1; \
+	fi
 	docker-compose up -d
 	@echo "$(GREEN)✅ Контейнер запущен!$(NC)"
 
@@ -158,6 +167,30 @@ git-setup: ## Настройка Git репозитория
 	@echo "  git commit -m 'Initial commit'"
 	@echo "  git remote add origin YOUR_REPO_URL"
 	@echo "  git push -u origin main"
+
+git-push: ## Загрузка на GitHub
+	@echo "$(GREEN)📤 Загрузка на GitHub...$(NC)"
+	bash git-push.sh "Update from Makefile"
+
+deploy: ## Деплой на сервер (требуется: make deploy SERVER=user@ip)
+	@if [ -z "$(SERVER)" ]; then \
+		echo "$(RED)❌ Укажите сервер: make deploy SERVER=user@server_ip$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)🚀 Деплой на $(SERVER)...$(NC)"
+	bash deploy.sh $(SERVER)
+
+backup-create: ## Создать бэкап
+	@echo "$(GREEN)💾 Создание бэкапа...$(NC)"
+	bash backup.sh
+
+fix-permissions: ## Исправить права доступа для Docker
+	@echo "$(GREEN)🔧 Исправление прав доступа...$(NC)"
+	mkdir -p temp processed_images logs
+	chmod 777 temp processed_images logs 2>/dev/null || true
+	chmod 600 .env 2>/dev/null || true
+	chmod 600 *.session 2>/dev/null || true
+	@echo "$(GREEN)✅ Права исправлены$(NC)"
 
 .DEFAULT_GOAL := help
 

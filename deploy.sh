@@ -90,14 +90,35 @@ echo ""
 echo "🔒 Установка прав доступа..."
 ssh $SERVER "cd $REMOTE_DIR && chmod 600 .env 2>/dev/null || true && chmod 600 *.session 2>/dev/null || true"
 
+# Установка прав на директории
+echo ""
+echo "🔒 Установка прав на директории..."
+ssh $SERVER "cd $REMOTE_DIR && mkdir -p temp processed_images logs && chmod 777 temp processed_images logs"
+
 # Сборка и запуск Docker
 echo ""
 echo "🐳 Сборка Docker образа на сервере..."
 ssh $SERVER "cd $REMOTE_DIR && docker-compose build"
 
+# Проверка наличия session файла
 echo ""
-echo "🚀 Запуск контейнера..."
-ssh $SERVER "cd $REMOTE_DIR && docker-compose up -d"
+if ssh $SERVER "test -f $REMOTE_DIR/copier_session.session"; then
+    echo "✅ Session файл найден, запуск контейнера..."
+    ssh $SERVER "cd $REMOTE_DIR && docker-compose up -d"
+else
+    echo "⚠️  Session файл не найден!"
+    echo ""
+    echo "📱 Необходима первая авторизация в Telegram"
+    echo "Выполните на сервере:"
+    echo "  ssh $SERVER"
+    echo "  cd $REMOTE_DIR"
+    echo "  bash first-auth.sh"
+    echo ""
+    echo "После авторизации запустите:"
+    echo "  docker-compose up -d"
+    echo ""
+    exit 0
+fi
 
 # Проверка статуса
 echo ""

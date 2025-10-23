@@ -15,14 +15,16 @@ services:
     
     # Volumes для персистентности
     volumes:
-      # Сессия Telegram (важно для сохранения авторизации)
-      - ./copier_session.session:/app/copier_session.session
-      - ./copier_session.session-journal:/app/copier_session.session-journal
-      # Логи
-      - ./logs:/app/logs
-      # Временные файлы
-      - ./temp:/app/temp
-      - ./processed_images:/app/processed_images
+      # Весь рабочий каталог (для session файлов и данных)
+      - .:/app
+      # Альтернативный вариант (если нужна изоляция):
+      # - ./copier_session.session:/app/copier_session.session
+      # - ./logs:/app/logs
+      # - ./temp:/app/temp
+      # - ./processed_images:/app/processed_images
+    
+    # Права пользователя (соответствует пользователю в Dockerfile)
+    user: "1000:1000"
     
     # Логирование
     logging:
