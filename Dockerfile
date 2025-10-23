@@ -35,6 +35,13 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
+# Установка переменных окружения
+ENV PYTHONUNBUFFERED=1
+ENV TESSERACT_CMD=/usr/bin/tesseract
+
+# Создание непривилегированного пользователя для безопасности
+RUN useradd -m -u 1000 appuser
+
 # Копирование исходного кода
 COPY --chown=appuser:appuser config.py .
 COPY --chown=appuser:appuser llm_client.py .
@@ -43,22 +50,13 @@ COPY --chown=appuser:appuser copier.py .
 COPY --chown=appuser:appuser utils.py .
 COPY --chown=appuser:appuser docker-entrypoint.sh .
 
-# Создание необходимых директорий
-RUN mkdir -p temp processed_images logs
-
-# Установка переменных окружения
-ENV PYTHONUNBUFFERED=1
-ENV TESSERACT_CMD=/usr/bin/tesseract
-
-# Создание непривилегированного пользователя для безопасности
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Создание необходимых директорий с правильными правами
+RUN mkdir -p temp processed_images logs && \
+    chown -R appuser:appuser /app && \
+    chmod +x docker-entrypoint.sh
 
 # Переключение на непривилегированного пользователя
 USER appuser
-
-# Установка прав на entrypoint скрипт
-RUN chmod +x docker-entrypoint.sh
 
 # Healthcheck
 HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \

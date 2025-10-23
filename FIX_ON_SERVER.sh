@@ -15,7 +15,8 @@ SERVER=$1
 REMOTE_DIR="/opt/telegram-post-copier"
 
 echo "📤 Копирование исправленных файлов на $SERVER..."
-scp Dockerfile docker-compose.yml docker-entrypoint.sh first-auth.sh utils.py $SERVER:$REMOTE_DIR/
+echo "Файлы: Dockerfile, docker-compose.yml, docker-entrypoint.sh, first-auth.sh, utils.py"
+scp Dockerfile docker-compose.yml docker-entrypoint.sh first-auth.sh utils.py $SERVER:$REMOTE_DIR/ 2>&1 | grep -v "Warning: Permanently added"
 
 echo ""
 echo "🔧 Применение исправлений на сервере..."
