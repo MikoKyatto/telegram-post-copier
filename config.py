@@ -15,7 +15,7 @@ class Config:
     # 🔑 Telegram API
     API_ID = int(os.getenv('API_ID', 0))
     API_HASH = os.getenv('API_HASH', '')
-    SESSION_NAME = 'copier_session'
+    SESSION_NAME = 'temp/copier_session'  # Используем temp/ директорию с правами 777
     
     # 📢 Каналы
     SOURCE_CHANNEL = os.getenv('SOURCE_CHANNEL', '')
