@@ -188,7 +188,7 @@ class LLMClient:
     def _initialize_providers(self):
         """Инициализация всех провайдеров"""
         
-        # Определяем модели по умолчанию
+        # Определяем модели по умолчанию для каждого провайдера
         default_models = {
             "openai": "gpt-3.5-turbo",
             "deepseek": "deepseek-chat",
@@ -198,34 +198,39 @@ class LLMClient:
             "huggingface": "mistralai/Mixtral-8x7B-Instruct-v0.1"
         }
         
+        # Определяем какую модель использовать
+        # Если LLM_MODEL=auto или если LLM_PROVIDER=auto, используем дефолтные модели для каждого провайдера
+        use_custom_model = Config.LLM_MODEL != 'auto' and Config.LLM_PROVIDER != 'auto'
+        
         # OpenAI
         if Config.OPENAI_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["openai"]
+            # Используем кастомную модель только если провайдер явно указан как openai
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'openai') else default_models["openai"]
             self.providers.append(OpenAIProvider("OpenAI", Config.OPENAI_API_KEY, model))
         
         # DeepSeek
         if Config.DEEPSEEK_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["deepseek"]
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'deepseek') else default_models["deepseek"]
             self.providers.append(OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com"))
         
         # xAI (Grok)
         if Config.XAI_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["xai"]
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'xai') else default_models["xai"]
             self.providers.append(OpenAIProvider("xAI", Config.XAI_API_KEY, model, "https://api.x.ai/v1"))
         
         # Google Gemini
         if Config.GOOGLE_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["google"]
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'google') else default_models["google"]
             self.providers.append(GoogleGeminiProvider("Google Gemini", Config.GOOGLE_API_KEY, model))
         
         # Cohere
         if Config.COHERE_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["cohere"]
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'cohere') else default_models["cohere"]
             self.providers.append(CohereProvider("Cohere", Config.COHERE_API_KEY, model))
         
         # HuggingFace
         if Config.HUGGINGFACE_API_KEY:
-            model = Config.LLM_MODEL if Config.LLM_MODEL != 'auto' else default_models["huggingface"]
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'huggingface') else default_models["huggingface"]
             self.providers.append(HuggingFaceProvider("HuggingFace", Config.HUGGINGFACE_API_KEY, model))
     
     def _generate_with_fallback(self, prompt: str, system_prompt: str = "", temperature: float = None, max_tokens: int = 1000) -> Optional[str]:
