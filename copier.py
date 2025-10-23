@@ -18,12 +18,15 @@ from llm_client import get_llm_client
 from image_processor import get_image_processor
 
 # Настройка логирования
+import os
+os.makedirs('logs', exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('copier.log')
+        logging.FileHandler('logs/copier.log')
     ]
 )
 logger = logging.getLogger(__name__)
