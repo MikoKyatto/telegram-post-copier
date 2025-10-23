@@ -64,7 +64,7 @@ class OpenAIProvider(LLMProvider):
 class GoogleGeminiProvider(LLMProvider):
     """Google AI Studio (Gemini)"""
     
-    def __init__(self, name: str, api_key: str, model: str = "gemini-pro"):
+    def __init__(self, name: str, api_key: str, model: str = "gemini-1.5-flash"):
         super().__init__(name, api_key, model)
         if self.is_available:
             try:
@@ -98,7 +98,7 @@ class GoogleGeminiProvider(LLMProvider):
 class CohereProvider(LLMProvider):
     """Cohere AI"""
     
-    def __init__(self, name: str, api_key: str, model: str = "command"):
+    def __init__(self, name: str, api_key: str, model: str = "command-r-plus"):
         super().__init__(name, api_key, model)
         if self.is_available:
             try:
@@ -193,8 +193,8 @@ class LLMClient:
             "openai": "gpt-3.5-turbo",
             "deepseek": "deepseek-chat",
             "xai": "grok-beta",
-            "google": "gemini-pro",
-            "cohere": "command",
+            "google": "gemini-1.5-flash",  # Обновлено: gemini-pro устарела
+            "cohere": "command-r-plus",     # Обновлено: command удалена
             "huggingface": "mistralai/Mixtral-8x7B-Instruct-v0.1"
         }
         
