@@ -21,15 +21,18 @@ class Config:
     SOURCE_CHANNEL = os.getenv('SOURCE_CHANNEL', '')
     TARGET_CHANNEL = os.getenv('TARGET_CHANNEL', '')
     
-    # 🧠 LLM Configuration
-    LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'deepseek')  # openai, deepseek, xai
-    LLM_MODEL = os.getenv('LLM_MODEL', 'deepseek-chat')
+    # 🧠 LLM Configuration (multi-provider with auto-fallback)
+    LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'auto')  # auto, openai, deepseek, xai, google, cohere, huggingface
+    LLM_MODEL = os.getenv('LLM_MODEL', 'auto')  # auto or specific model
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.7'))
     
-    # API Keys
+    # API Keys (fill in available ones - bot will try all automatically)
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
     DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
     XAI_API_KEY = os.getenv('XAI_API_KEY', '')
+    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')  # Google AI Studio (Gemini) - FREE
+    COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')  # Cohere - has free tier
+    HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')  # HuggingFace - FREE
     
     # 🔗 Брендинг
     YOUR_LINK = os.getenv('YOUR_LINK', 't.me/your_channel')
@@ -71,12 +74,17 @@ class Config:
             errors.append("❌ TARGET_CHANNEL не установлен")
             
         # Проверка наличия хотя бы одного API ключа для LLM
-        if cls.LLM_PROVIDER == 'openai' and not cls.OPENAI_API_KEY:
-            errors.append("❌ OPENAI_API_KEY не установлен")
-        elif cls.LLM_PROVIDER == 'deepseek' and not cls.DEEPSEEK_API_KEY:
-            errors.append("❌ DEEPSEEK_API_KEY не установлен")
-        elif cls.LLM_PROVIDER == 'xai' and not cls.XAI_API_KEY:
-            errors.append("❌ XAI_API_KEY не установлен")
+        has_llm_key = any([
+            cls.OPENAI_API_KEY,
+            cls.DEEPSEEK_API_KEY,
+            cls.XAI_API_KEY,
+            cls.GOOGLE_API_KEY,
+            cls.COHERE_API_KEY,
+            cls.HUGGINGFACE_API_KEY
+        ])
+        
+        if not has_llm_key:
+            errors.append("❌ Не установлен ни один LLM API ключ (OPENAI/DEEPSEEK/XAI/GOOGLE/COHERE/HUGGINGFACE)")
             
         return errors
 
