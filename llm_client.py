@@ -64,14 +64,15 @@ class OpenAIProvider(LLMProvider):
 class GoogleGeminiProvider(LLMProvider):
     """Google AI Studio (Gemini)"""
     
-    def __init__(self, name: str, api_key: str, model: str = "gemini-1.5-flash-latest"):
+    def __init__(self, name: str, api_key: str, model: str = "gemini-1.5-flash"):
         super().__init__(name, api_key, model)
         if self.is_available:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                # Убираем префикс models/ если есть
+                # Убираем префикс models/ если есть и используем models/имя для API v1
                 clean_model = model.replace("models/", "")
+                self.model_name = f"models/{clean_model}" if not clean_model.startswith("models/") else clean_model
                 self.client = genai.GenerativeModel(clean_model)
             except Exception as e:
                 logger.warning(f"⚠️ {name}: Не удалось инициализировать клиент: {e}")
@@ -201,7 +202,7 @@ class LLMClient:
         default_models = {
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-8b-instant",  # Обновлено! Старая llama3-8b-8192 удалена
-            "google": "gemini-1.5-flash-latest",  # -latest для актуальной версии
+            "google": "gemini-1.5-flash",  # Без -latest, стабильная версия
             "huggingface": "microsoft/Phi-3-mini-4k-instruct"  # Быстрая и бесплатная модель
         }
         
@@ -307,8 +308,8 @@ class LLMClient:
             
             system_prompt = "Ты - профессиональный SMM-специалист, который умеет переписывать посты, сохраняя смысл, но делая их уникальными и авторскими."
             
-            # Вызов с fallback
-            result = self._generate_with_fallback(prompt, system_prompt)
+            # Вызов с fallback, max_tokens=600 для ограничения длины (Telegram лимит 1024 символа на caption)
+            result = self._generate_with_fallback(prompt, system_prompt, temperature=self.temperature, max_tokens=600)
             
             if result:
                 return result
@@ -343,6 +344,7 @@ class LLMClient:
 6. Сохрани все важные данные: регионы, провайдеры, время
 7. Сделай текст живым и срочным, но информативным
 8. НЕ используй фразы типа "по данным мониторинга" - пиши от своего лица
+9. ⚠️ КРИТИЧЕСКИ ВАЖНО: Текст должен быть КОРОТКИМ - максимум 800 символов!
 
 ПЕРЕПИСАННЫЙ ТЕКСТ:"""
     
@@ -359,6 +361,7 @@ class LLMClient:
 3. Добавь упоминание "{Config.YOUR_BRAND_NAME}" как решения (естественно)
 4. Используй стиль: {Config.CHANNEL_STYLE}
 5. Сделай текст немного более живым
+6. ⚠️ КРИТИЧЕСКИ ВАЖНО: Текст должен быть КОРОТКИМ - максимум 800 символов!
 
 ПЕРЕПИСАННЫЙ ТЕКСТ:"""
     

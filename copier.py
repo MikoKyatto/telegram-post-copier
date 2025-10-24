@@ -188,6 +188,13 @@ class TelegramPostCopier:
             else:
                 logger.info("ℹ️ Изображение не требует модификации")
             
+            # Telegram имеет лимит 1024 символа для подписи к фото
+            MAX_CAPTION_LENGTH = 1024
+            if len(text) > MAX_CAPTION_LENGTH:
+                logger.warning(f"⚠️ Текст слишком длинный ({len(text)} символов), обрезаем до {MAX_CAPTION_LENGTH}")
+                # Обрезаем и добавляем многоточие
+                text = text[:MAX_CAPTION_LENGTH-3] + "..."
+            
             # Отправка в целевой канал
             await self.client.send_file(
                 self.target_entity,
