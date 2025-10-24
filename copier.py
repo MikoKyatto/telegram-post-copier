@@ -17,16 +17,26 @@ from config import Config
 from llm_client import get_llm_client
 from image_processor import get_image_processor
 
-# Настройка логирования
+# Настройка логирования с ротацией
 import os
+from logging.handlers import RotatingFileHandler
+
 os.makedirs('logs', exist_ok=True)
+
+# Ротация логов: максимум 10MB на файл, хранить 5 файлов
+file_handler = RotatingFileHandler(
+    'logs/copier.log',
+    maxBytes=10*1024*1024,  # 10 MB
+    backupCount=5,  # Хранить 5 файлов
+    encoding='utf-8'
+)
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/copier.log')
+        file_handler
     ]
 )
 logger = logging.getLogger(__name__)
