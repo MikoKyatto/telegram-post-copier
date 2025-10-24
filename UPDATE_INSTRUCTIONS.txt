@@ -1,0 +1,45 @@
+
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║  📝 СОЗДАН СКРИПТ АВТОМАТИЧЕСКОГО ОБНОВЛЕНИЯ                   ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+🚀 ЗАПУСТИТЕ СЕЙЧАС:
+
+    ./UPDATE_SERVER_NOW.sh
+
+Скрипт сам:
+  → Подключится к серверу
+  → Обновит код (git pull)
+  → Пересоберёт контейнер
+  → Запустит и покажет логи
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ИЛИ ВРУЧНУЮ:
+
+    ssh root@80.92.204.27
+    cd /opt/telegram-post-copier
+    git pull origin main
+    docker-compose down
+    docker-compose build --no-cache
+    docker-compose up -d
+    docker-compose logs -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 ВАШИ API КЛЮЧИ (анализ):
+
+✅ GROQ_API_KEY=gsk_pqcbu... - ПРАВИЛЬНЫЙ ФОРМАТ!
+✅ GOOGLE_API_KEY=AIzaSy... - ВАЛИДНЫЙ
+✅ XAI_API_KEY=xai-bG3bs... - ВАЛИДНЫЙ
+✅ HUGGINGFACE_API_KEY=hf_bQAs... - ВАЛИДНЫЙ
+❌ DEEPSEEK - нет баланса (можно отключить)
+
+После обновления ВСЕ 3 БЕСПЛАТНЫХ LLM ЗАРАБОТАЮТ:
+  ✅ Groq (llama-3.1-8b-instant)
+  ✅ Google Gemini (gemini-1.5-flash-latest)
+  ✅ HuggingFace (microsoft/Phi-3-mini-4k-instruct)
+
+
