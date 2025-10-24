@@ -225,9 +225,9 @@ class LLMClient:
         # АКТУАЛЬНЫЕ бесплатные модели (октябрь 2025)
         default_models = {
             "deepseek": "deepseek-chat",
-            "groq": "llama-3.1-8b-instant",  # Обновлено! Старая llama3-8b-8192 удалена
-            "google": "gemini-1.5-flash",  # Стабильная версия
-            "huggingface": "microsoft/Phi-3-mini-4k-instruct",  # Быстрая и бесплатная модель
+            "groq": "llama-3.1-8b-instant",  # ✅ РАБОТАЕТ!
+            "google": "gemini-pro",  # Стабильная версия (без префикса models/)
+            "huggingface": "google/flan-t5-base",  # Стабильная бесплатная модель Google
             "xai": "grok-beta"  # xAI Grok модель
         }
         
