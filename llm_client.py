@@ -26,7 +26,7 @@ class LLMProvider:
 
 
 class OpenAIProvider(LLMProvider):
-    """OpenAI / DeepSeek / xAI (OpenAI-совместимые API)"""
+    """OpenAI / DeepSeek / xAI / Groq (OpenAI-совместимые API)"""
     
     def __init__(self, name: str, api_key: str, model: str, base_url: Optional[str] = None):
         super().__init__(name, api_key, model)
@@ -34,10 +34,18 @@ class OpenAIProvider(LLMProvider):
         if self.is_available:
             try:
                 from openai import OpenAI
-                self.client = OpenAI(
-                    api_key=api_key,
-                    base_url=base_url
-                ) if base_url else OpenAI(api_key=api_key)
+                # ИСПРАВЛЕНИЕ: Правильная инициализация с base_url
+                if base_url:
+                    self.client = OpenAI(
+                        api_key=api_key,
+                        base_url=base_url,
+                        timeout=30.0  # Добавляем таймаут
+                    )
+                else:
+                    self.client = OpenAI(
+                        api_key=api_key,
+                        timeout=30.0
+                    )
             except Exception as e:
                 logger.warning(f"⚠️ {name}: Не удалось инициализировать клиент: {e}")
                 self.is_available = False
@@ -70,10 +78,12 @@ class GoogleGeminiProvider(LLMProvider):
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                # Убираем префикс models/ если есть и используем models/имя для API v1
+                # Убираем префикс models/ если есть
                 clean_model = model.replace("models/", "")
-                self.model_name = f"models/{clean_model}" if not clean_model.startswith("models/") else clean_model
+                # ИСПРАВЛЕНИЕ: generation_config передается при создании модели, а не в generate_content
+                # Используем дефолтные параметры, т.к. temperature будет передаваться в generate()
                 self.client = genai.GenerativeModel(clean_model)
+                self.genai = genai  # Сохраняем для создания новых моделей с разными параметрами
             except Exception as e:
                 logger.warning(f"⚠️ {name}: Не удалось инициализировать клиент: {e}")
                 self.is_available = False
@@ -83,15 +93,17 @@ class GoogleGeminiProvider(LLMProvider):
             # Gemini не поддерживает отдельный system prompt, комбинируем
             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
             
-            generation_config = {
-                "temperature": temperature,
-                "max_output_tokens": max_tokens,
-            }
-            
-            response = self.client.generate_content(
-                full_prompt,
-                generation_config=generation_config
+            # ИСПРАВЛЕНИЕ: Создаем модель с generation_config при каждом вызове
+            model_with_config = self.genai.GenerativeModel(
+                model_name=self.model,
+                generation_config={
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens,
+                }
             )
+            
+            # Вызываем generate_content БЕЗ generation_config
+            response = model_with_config.generate_content(full_prompt)
             return response.text.strip()
         except Exception as e:
             logger.warning(f"⚠️ {self.name}: Ошибка генерации: {e}")
@@ -135,19 +147,24 @@ class HuggingFaceProvider(LLMProvider):
     def __init__(self, name: str, api_key: str, model: str = "mistralai/Mixtral-8x7B-Instruct-v0.1"):
         super().__init__(name, api_key, model)
         self.api_url = f"https://api-inference.huggingface.co/models/{model}"
-        self.headers = {"Authorization": f"Bearer {api_key}"}
+        # ИСПРАВЛЕНИЕ: Добавляем Content-Type в headers
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
     
     def generate(self, prompt: str, system_prompt: str = "", temperature: float = 0.7, max_tokens: int = 1000) -> Optional[str]:
         try:
-            # Форматируем промпт
+            # ИСПРАВЛЕНИЕ: Форматируем промпт как строку (inputs должен быть строкой, не массивом)
             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
             
             payload = {
-                "inputs": full_prompt,
+                "inputs": full_prompt,  # Убедимся что это строка
                 "parameters": {
                     "temperature": temperature,
                     "max_new_tokens": max_tokens,
-                    "return_full_text": False
+                    "return_full_text": False,
+                    "do_sample": True  # Добавляем для лучшей генерации
                 }
             }
             
@@ -160,11 +177,18 @@ class HuggingFaceProvider(LLMProvider):
             
             if response.status_code == 200:
                 result = response.json()
+                # ИСПРАВЛЕНИЕ: Проверяем разные форматы ответа
                 if isinstance(result, list) and len(result) > 0:
+                    # Формат: [{"generated_text": "..."}]
                     generated = result[0].get("generated_text", "").strip()
                     if generated:
                         return generated
                     logger.warning(f"⚠️ {self.name}: Пустой generated_text в ответе")
+                elif isinstance(result, dict) and "generated_text" in result:
+                    # Альтернативный формат: {"generated_text": "..."}
+                    generated = result["generated_text"].strip()
+                    if generated:
+                        return generated
                 else:
                     logger.warning(f"⚠️ {self.name}: Некорректный формат ответа: {result}")
             else:
@@ -202,8 +226,9 @@ class LLMClient:
         default_models = {
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-8b-instant",  # Обновлено! Старая llama3-8b-8192 удалена
-            "google": "gemini-1.5-flash",  # Без -latest, стабильная версия
-            "huggingface": "microsoft/Phi-3-mini-4k-instruct"  # Быстрая и бесплатная модель
+            "google": "gemini-1.5-flash",  # Стабильная версия
+            "huggingface": "microsoft/Phi-3-mini-4k-instruct",  # Быстрая и бесплатная модель
+            "xai": "grok-beta"  # xAI Grok модель
         }
         
         use_custom_model = Config.LLM_MODEL != 'auto' and Config.LLM_PROVIDER != 'auto'
@@ -211,6 +236,7 @@ class LLMClient:
         # GROQ - БЕСПЛАТНО, быстро! (groq.com)
         if hasattr(Config, 'GROQ_API_KEY') and Config.GROQ_API_KEY:
             model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'groq') else default_models["groq"]
+            # ИСПРАВЛЕНИЕ: Правильный base_url для Groq
             provider = OpenAIProvider("Groq", Config.GROQ_API_KEY, model, "https://api.groq.com/openai/v1")
             if self._test_provider(provider):
                 self.providers.append(provider)
@@ -232,13 +258,15 @@ class LLMClient:
         # DeepSeek - дешево ($0.14/1M), если есть баланс
         if hasattr(Config, 'DEEPSEEK_API_KEY') and Config.DEEPSEEK_API_KEY:
             model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'deepseek') else default_models["deepseek"]
-            provider = OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com")
+            # ИСПРАВЛЕНИЕ: Правильный base_url для DeepSeek (с /v1)
+            provider = OpenAIProvider("DeepSeek", Config.DEEPSEEK_API_KEY, model, "https://api.deepseek.com/v1")
             if self._test_provider(provider):
                 self.providers.append(provider)
         
         # xAI Grok - платно, если есть баланс
         if hasattr(Config, 'XAI_API_KEY') and Config.XAI_API_KEY:
-            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'xai') else "grok-beta"
+            model = Config.LLM_MODEL if (use_custom_model and Config.LLM_PROVIDER == 'xai') else default_models["xai"]
+            # ИСПРАВЛЕНИЕ: Правильный base_url для xAI
             provider = OpenAIProvider("xAI Grok", Config.XAI_API_KEY, model, "https://api.x.ai/v1")
             if self._test_provider(provider):
                 self.providers.append(provider)
