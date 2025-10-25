@@ -64,7 +64,8 @@ class TelegramPostCopier:
         
         self.source_entity = None
         self.target_entity = None
-        self.last_post_id = 0
+        self.groups = {}  # Буфер для группировки медиа по grouped_id
+        self.group_timers = {}  # Таймеры для flush групп
         self.is_running = False
         
         logger.info("🚀 TelegramPostCopier инициализирован")
@@ -81,6 +82,13 @@ class TelegramPostCopier:
             
             # Получение сущностей каналов
             await self._init_channels()
+            
+            # Регистрация event handler для новых сообщений
+            self.client.add_event_handler(
+                self._new_message_handler,
+                events.NewMessage(chats=self.source_entity)
+            )
+            logger.info("📡 Event-based мониторинг зарегистрирован")
             
             logger.info("✨ Система готова к работе!")
             
@@ -104,55 +112,87 @@ class TelegramPostCopier:
             self.target_entity = await self.client.get_entity(Config.TARGET_CHANNEL)
             logger.info(f"✅ Целевой канал: {self.target_entity.title}")
             
-            # Получение последнего поста для инициализации
-            messages = await self.client.get_messages(self.source_entity, limit=1)
-            if messages:
-                self.last_post_id = messages[0].id
-                logger.info(f"📌 Начальная позиция: пост ID {self.last_post_id}")
-            
         except Exception as e:
             logger.error(f"❌ Ошибка при инициализации каналов: {e}")
             raise
     
-    async def check_and_copy_new_posts(self):
-        """Проверка новых постов и их копирование"""
+    async def _new_message_handler(self, event):
+        """Обработчик новых сообщений (event-based)"""
         try:
-            # Получение последнего поста
-            messages = await self.client.get_messages(self.source_entity, limit=5)
+            msg = event.message
+            group_id = msg.grouped_id
             
-            # Обработка новых постов (в обратном порядке, чтобы копировать от старых к новым)
-            new_messages = [m for m in reversed(messages) if m.id > self.last_post_id]
+            logger.info(f"🔔 Новое сообщение ID {msg.id} (grouped_id: {group_id or 'None'})")
             
-            for message in new_messages:
-                await self._process_and_copy_message(message)
-                self.last_post_id = message.id
+            if group_id:
+                # Сообщение является частью альбома
+                if group_id not in self.groups:
+                    self.groups[group_id] = []
                 
-                # Задержка между постами для избежания флуда
-                await asyncio.sleep(2)
+                self.groups[group_id].append(msg)
+                
+                # Отменяем старый таймер если был
+                if group_id in self.group_timers:
+                    self.group_timers[group_id].cancel()
+                
+                # Создаем новый таймер для flush группы через 2 секунды
+                # (чтобы собрать все сообщения альбома)
+                timer = asyncio.create_task(self._flush_group_after_delay(group_id, delay=2.0))
+                self.group_timers[group_id] = timer
+            else:
+                # Одиночное сообщение - обрабатываем сразу
+                await self._process_and_copy_group([msg])
+                await asyncio.sleep(2)  # Антифлуд
             
-            if new_messages:
-                logger.info(f"✅ Обработано {len(new_messages)} новых постов")
-            
-        except FloodWaitError as e:
-            logger.warning(f"⏳ Flood wait: ожидание {e.seconds} секунд")
-            await asyncio.sleep(e.seconds)
         except Exception as e:
-            logger.error(f"❌ Ошибка при проверке постов: {e}")
+            logger.error(f"❌ Ошибка в обработчике события: {e}", exc_info=True)
     
-    async def _process_and_copy_message(self, message):
+    async def _flush_group_after_delay(self, group_id, delay: float):
+        """Отложенная обработка группы (после сбора всех сообщений альбома)"""
+        try:
+            await asyncio.sleep(delay)
+            
+            if group_id in self.groups:
+                msgs = self.groups.pop(group_id)
+                self.group_timers.pop(group_id, None)
+                
+                # Сортируем по ID для правильного порядка
+                msgs.sort(key=lambda m: m.id)
+                
+                logger.info(f"📦 Flush группы {group_id}: собрано {len(msgs)} сообщений")
+                
+                await self._process_and_copy_group(msgs)
+                await asyncio.sleep(2)  # Антифлуд
+                
+        except asyncio.CancelledError:
+            # Таймер был отменен (пришло еще сообщение в группу)
+            pass
+        except Exception as e:
+            logger.error(f"❌ Ошибка при flush группы {group_id}: {e}", exc_info=True)
+    
+    async def _process_and_copy_group(self, messages: list):
         """
-        Обработка и копирование одного сообщения
+        Обработка и копирование группы сообщений (альбом или одиночное)
         
         Args:
-            message: Telethon Message объект
+            messages: List of Telethon Message objects (может быть 1 или несколько)
         """
         try:
-            logger.info(f"🔄 Обработка поста ID {message.id}")
+            if not messages:
+                return
             
-            # Извлечение текста
-            original_text = message.text or ""
+            first_msg = messages[0]
+            group_id = first_msg.grouped_id
             
-            # Проверка наличия ссылок в тексте
+            if len(messages) > 1:
+                logger.info(f"🔄 Обработка альбома ID {group_id} ({len(messages)} медиа)")
+            else:
+                logger.info(f"🔄 Обработка поста ID {first_msg.id}")
+            
+            # Текст обычно в первом сообщении
+            original_text = first_msg.text or ""
+            
+            # Проверка ссылок в тексте
             has_links = bool(re.search(r'(t\.me/|https?://)', original_text))
             
             # Переписывание текста с помощью AI
@@ -160,60 +200,120 @@ class TelegramPostCopier:
                 logger.info("🧠 AI: Переписывание текста...")
                 rewritten_text = self.llm_client.rewrite_text(original_text, has_links)
                 
-                # Проверка уникальности
                 uniqueness = self.llm_client.check_uniqueness(original_text, rewritten_text)
                 logger.info(f"📊 Уникальность: {uniqueness:.1f}%")
                 
-                # Если уникальность низкая, добавляем CTA
+                # Если уникальность низкая, добавляем упоминание бренда
                 if uniqueness < 30:
-                    logger.info("🎯 Добавление CTA для увеличения уникальности...")
+                    logger.info("🎯 Добавление упоминания бренда...")
                     rewritten_text = self.llm_client.enhance_with_cta(rewritten_text)
             else:
                 rewritten_text = ""
             
-            # Обработка изображений
-            if message.photo:
-                await self._copy_message_with_photo(message, rewritten_text)
-            else:
-                await self._copy_text_message(rewritten_text)
+            # Telegram лимит для подписи к фото/альбому: 1024 символа
+            MAX_CAPTION_LENGTH = 1024
+            if len(rewritten_text) > MAX_CAPTION_LENGTH:
+                logger.warning(f"⚠️ Текст обрезан до {MAX_CAPTION_LENGTH} символов (было {len(rewritten_text)})")
+                rewritten_text = rewritten_text[:MAX_CAPTION_LENGTH-3] + "..."
             
-            logger.info(f"✅ Пост ID {message.id} успешно скопирован")
+            # Сбор и обработка всех медиа из группы
+            media_list = []
+            for msg in messages:
+                if msg.photo or (msg.media and hasattr(msg.media, 'photo')):
+                    logger.info(f"🎨 Обработка изображения из сообщения ID {msg.id}...")
+                    
+                    # Скачиваем как bytes
+                    photo_bytes = await msg.download_media(bytes)
+                    
+                    # Обрабатываем (замена ссылок)
+                    processed_photo, was_modified = self.image_processor.process_image(photo_bytes)
+                    
+                    if was_modified:
+                        logger.info("✨ Изображение модифицировано (ссылки заменены)")
+                    
+                    media_list.append(processed_photo)
+            
+            # Отправка в зависимости от типа контента
+            if media_list:
+                if len(media_list) > 1:
+                    # Альбом (несколько изображений)
+                    await self._copy_media_album(media_list, rewritten_text)
+                else:
+                    # Одно изображение
+                    await self._copy_single_photo(media_list[0], rewritten_text)
+            elif rewritten_text:
+                # Только текст
+                await self._copy_text_message(rewritten_text)
+            else:
+                logger.warning("⚠️ Нет контента для копирования")
+                return
+            
+            if len(messages) > 1:
+                logger.info(f"✅ Альбом успешно скопирован ({len(messages)} медиа)")
+            else:
+                logger.info(f"✅ Пост ID {first_msg.id} успешно скопирован")
             
         except Exception as e:
-            logger.error(f"❌ Ошибка при обработке поста ID {message.id}: {e}")
+            logger.error(f"❌ Ошибка при обработке группы: {e}", exc_info=True)
     
-    async def _copy_message_with_photo(self, message, text: str):
-        """Копирование сообщения с фото"""
+    async def _copy_single_photo(self, photo_bytes: bytes, text: str):
+        """Копирование одного изображения с подписью"""
         try:
-            logger.info("🎨 Обработка изображения...")
+            logger.info("📤 Отправка изображения...")
             
-            # Скачивание фото
-            photo_bytes = await message.download_media(bytes)
+            # Создаем BytesIO с правильным именем файла и расширением
+            bio = BytesIO(photo_bytes)
+            bio.name = "photo.jpg"  # ВАЖНО: добавляем имя с расширением!
+            bio.seek(0)  # Позиционируемся в начало
             
-            # Обработка изображения (замена ссылок)
-            processed_photo, was_modified = self.image_processor.process_image(photo_bytes)
-            
-            if was_modified:
-                logger.info("✨ Изображение модифицировано (ссылки заменены)")
-            else:
-                logger.info("ℹ️ Изображение не требует модификации")
-            
-            # Telegram имеет лимит 1024 символа для подписи к фото
-            MAX_CAPTION_LENGTH = 1024
-            if len(text) > MAX_CAPTION_LENGTH:
-                logger.warning(f"⚠️ Текст слишком длинный ({len(text)} символов), обрезаем до {MAX_CAPTION_LENGTH}")
-                # Обрезаем и добавляем многоточие
-                text = text[:MAX_CAPTION_LENGTH-3] + "..."
-            
-            # Отправка в целевой канал
             await self.client.send_file(
                 self.target_entity,
-                BytesIO(processed_photo),
-                caption=text
+                bio,
+                caption=text if text else None
             )
             
+        except FloodWaitError as e:
+            logger.warning(f"⏳ Flood wait: ожидание {e.seconds} секунд")
+            await asyncio.sleep(e.seconds)
+            await self._copy_single_photo(photo_bytes, text)  # Retry
         except Exception as e:
-            logger.error(f"❌ Ошибка при копировании фото: {e}")
+            logger.error(f"❌ Ошибка при отправке изображения: {e}", exc_info=True)
+            raise
+    
+    async def _copy_media_album(self, media_list: list, text: str):
+        """
+        Копирование альбома (несколько изображений одним сообщением)
+        
+        Args:
+            media_list: List[bytes] - список байтов изображений
+            text: str - подпись к альбому
+        """
+        try:
+            logger.info(f"📤 Отправка альбома ({len(media_list)} изображений)...")
+            
+            # Подготавливаем файлы с правильными именами и расширениями
+            files = []
+            for idx, photo_bytes in enumerate(media_list):
+                bio = BytesIO(photo_bytes)
+                bio.name = f"photo_{idx + 1}.jpg"  # ВАЖНО: имя с расширением!
+                bio.seek(0)  # Позиционируемся в начало
+                files.append(bio)
+            
+            # Отправляем как альбом (один вызов send_file с массивом)
+            await self.client.send_file(
+                self.target_entity,
+                files,
+                caption=text if text else None
+            )
+            
+            logger.info(f"✅ Альбом отправлен ({len(media_list)} фото)")
+            
+        except FloodWaitError as e:
+            logger.warning(f"⏳ Flood wait: ожидание {e.seconds} секунд")
+            await asyncio.sleep(e.seconds)
+            await self._copy_media_album(media_list, text)  # Retry
+        except Exception as e:
+            logger.error(f"❌ Ошибка при отправке альбома: {e}", exc_info=True)
             raise
     
     async def _copy_text_message(self, text: str):
@@ -223,49 +323,42 @@ class TelegramPostCopier:
                 logger.warning("⚠️ Текст слишком короткий, пропускаем")
                 return
             
+            logger.info("📤 Отправка текста...")
+            
             await self.client.send_message(self.target_entity, text)
             
+        except FloodWaitError as e:
+            logger.warning(f"⏳ Flood wait: ожидание {e.seconds} секунд")
+            await asyncio.sleep(e.seconds)
+            await self._copy_text_message(text)  # Retry
         except Exception as e:
-            logger.error(f"❌ Ошибка при копировании текста: {e}")
+            logger.error(f"❌ Ошибка при отправке текста: {e}", exc_info=True)
             raise
     
     async def run_forever(self):
-        """Бесконечный цикл мониторинга"""
+        """Запуск event-based мониторинга (работает бесконечно)"""
         self.is_running = True
-        retry_count = 0
         
-        logger.info(f"🔁 Запуск мониторинга (интервал: {Config.CHECK_INTERVAL}сек)")
+        logger.info("🔁 Запуск event-based мониторинга (слушаем новые сообщения)")
+        logger.info("💡 Бот будет автоматически обрабатывать новые посты в реальном времени")
         
-        while self.is_running:
-            try:
-                await self.check_and_copy_new_posts()
-                retry_count = 0  # Сброс счетчика при успехе
-                
-                # Ожидание до следующей проверки
-                await asyncio.sleep(Config.CHECK_INTERVAL)
-                
-            except KeyboardInterrupt:
-                logger.info("⏹️ Остановка по команде пользователя")
-                self.is_running = False
-                break
-            except Exception as e:
-                retry_count += 1
-                logger.error(f"❌ Ошибка в цикле мониторинга (попытка {retry_count}/{Config.MAX_RETRIES}): {e}")
-                
-                if retry_count >= Config.MAX_RETRIES:
-                    logger.critical("💥 Превышено количество попыток. Остановка.")
-                    self.is_running = False
-                    break
-                
-                # Экспоненциальная задержка при ошибках
-                wait_time = min(300, 30 * (2 ** retry_count))
-                logger.info(f"⏳ Ожидание {wait_time}сек перед повтором...")
-                await asyncio.sleep(wait_time)
+        try:
+            # Запускаем клиент до отключения
+            await self.client.run_until_disconnected()
+        except KeyboardInterrupt:
+            logger.info("⏹️ Остановка по команде пользователя")
+        finally:
+            self.is_running = False
     
     async def stop(self):
         """Остановка клиента"""
         logger.info("🛑 Остановка TelegramPostCopier...")
         self.is_running = False
+        
+        # Отменяем все активные таймеры
+        for timer in self.group_timers.values():
+            timer.cancel()
+        
         await self.client.disconnect()
         logger.info("👋 Отключено от Telegram")
 
@@ -306,4 +399,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("\n👋 До свидания!")
         sys.exit(0)
-
