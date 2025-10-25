@@ -162,6 +162,7 @@ docker-compose logs -f
    LLM_PROVIDER=auto
    GOOGLE_API_KEY=AIzaSy...     # Основной (бесплатно)
    DEEPSEEK_API_KEY=sk-...      # Запасной (дешево)
+   
    ```
 
 Бот автоматически переключится на DeepSeek, если Google Gemini недоступен!
