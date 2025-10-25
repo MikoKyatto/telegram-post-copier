@@ -48,7 +48,7 @@ class Config:
     )
     
     # ⏱️ Настройки мониторинга
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '300'))  # секунды
+    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # секунды
     MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))
     
     # 🔍 OCR настройки
