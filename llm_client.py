@@ -313,52 +313,52 @@ class LLMClient:
         logger.error("❌ Все LLM провайдеры недоступны!")
         return None
     
-   def rewrite_text(self, original_text: str, has_links: bool = True) -> str:
-    """
-    Переписывает текст поста, делая его уникальным
-    
-    Args:
-        original_text: Оригинальный текст поста
-        has_links: Есть ли в тексте ссылки для замены
+    def rewrite_text(self, original_text: str, has_links: bool = True) -> str:
+        """
+        Переписывает текст поста, делая его уникальным
         
-    Returns:
-        Переписанный уникальный текст
-    """
-    try:
-        if not original_text or len(original_text.strip()) < 10:
+        Args:
+            original_text: Оригинальный текст поста
+            has_links: Есть ли в тексте ссылки для замены
+            
+        Returns:
+            Переписанный уникальный текст
+        """
+        try:
+            if not original_text or len(original_text.strip()) < 10:
+                return original_text
+            
+            # Формируем промпт в зависимости от наличия ссылок
+            if has_links:
+                prompt = self._build_rewrite_prompt_with_links(original_text)
+            else:
+                prompt = self._build_rewrite_prompt_simple(original_text)
+            
+            system_prompt = "Ты - профессиональный SMM-специалист, который умеет переписывать посты на любые темы, сохраняя смысл, но делая их уникальными и авторскими. Всегда следуй инструкциям точно, шаг за шагом, чтобы результат был предсказуемым даже для простых моделей."
+            
+            # Вызов с fallback, max_tokens=600 для ограничения длины (Telegram лимит 1024 символа на caption)
+            result = self._generate_with_fallback(prompt, system_prompt, temperature=self.temperature, max_tokens=600)
+            
+            if result:
+                return result
+            else:
+                # Если все провайдеры недоступны, возвращаем оригинал с простой модификацией
+                logger.warning("⚠️ Используем fallback: простая модификация текста")
+                return self._simple_text_modification(original_text)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при переписывании текста: {e}")
             return original_text
-        
-        # Формируем промпт в зависимости от наличия ссылок
-        if has_links:
-            prompt = self._build_rewrite_prompt_with_links(original_text)
-        else:
-            prompt = self._build_rewrite_prompt_simple(original_text)
-        
-        system_prompt = "Ты - профессиональный SMM-специалист, который умеет переписывать посты на любые темы, сохраняя смысл, но делая их уникальными и авторскими. Всегда следуй инструкциям точно, шаг за шагом, чтобы результат был предсказуемым даже для простых моделей."
-        
-        # Вызов с fallback, max_tokens=600 для ограничения длины (Telegram лимит 1024 символа на caption)
-        result = self._generate_with_fallback(prompt, system_prompt, temperature=self.temperature, max_tokens=600)
-        
-        if result:
-            return result
-        else:
-            # Если все провайдеры недоступны, возвращаем оригинал с простой модификацией
-            logger.warning("⚠️ Используем fallback: простая модификация текста")
-            return self._simple_text_modification(original_text)
-        
-    except Exception as e:
-        logger.error(f"Ошибка при переписывании текста: {e}")
-        return original_text
-
-def _simple_text_modification(self, text: str) -> str:
-    """Простая модификация текста если все LLM недоступны"""
-    # Просто возвращаем слегка измененный текст без CTA
-    modified = f"{text}\n\n{Config.YOUR_BRAND_NAME}"
-    return modified
-
-def _build_rewrite_prompt_with_links(self, text: str) -> str:
-    """Строит промпт для текста со ссылками"""
-    return f"""Перепиши этот текст на любую тему так, чтобы он был уникальным, но сохранял весь смысл. Тема может быть любой, включая новости, события или информацию из Telegram.
+    
+    def _simple_text_modification(self, text: str) -> str:
+        """Простая модификация текста если все LLM недоступны"""
+        # Просто возвращаем слегка измененный текст без CTA
+        modified = f"{text}\n\n{Config.YOUR_BRAND_NAME}"
+        return modified
+    
+    def _build_rewrite_prompt_with_links(self, text: str) -> str:
+        """Строит промпт для текста со ссылками"""
+        return f"""Перепиши этот текст на любую тему так, чтобы он был уникальным, но сохранял весь смысл. Тема может быть любой, включая новости, события или информацию из Telegram.
 
 ОРИГИНАЛЬНЫЙ ТЕКСТ:
 {text}
@@ -376,10 +376,10 @@ def _build_rewrite_prompt_with_links(self, text: str) -> str:
 10. ⚠️ КРИТИЧЕСКИ ВАЖНО: Текст должен быть КОРОТКИМ - максимум 800 символов! Если оригинал длиннее, сократи несущественные части.
 
 ПЕРЕПИСАННЫЙ ТЕКСТ (начни сразу с текста, без введения):"""
-
-def _build_rewrite_prompt_simple(self, text: str) -> str:
-    """Строит промпт для текста без ссылок"""
-    return f"""Перепиши этот текст на любую тему так, чтобы он был уникальным, но сохранял весь смысл. Тема может быть любой, включая новости, события или информацию из Telegram.
+    
+    def _build_rewrite_prompt_simple(self, text: str) -> str:
+        """Строит промпт для текста без ссылок"""
+        return f"""Перепиши этот текст на любую тему так, чтобы он был уникальным, но сохранял весь смысл. Тема может быть любой, включая новости, события или информацию из Telegram.
 
 ОРИГИНАЛЬНЫЙ ТЕКСТ:
 {text}
@@ -396,38 +396,38 @@ def _build_rewrite_prompt_simple(self, text: str) -> str:
 9. ⚠️ КРИТИЧЕСКИ ВАЖНО: Текст должен быть КОРОТКИМ - максимум 800 символов! Если оригинал длиннее, сократи несущественные части.
 
 ПЕРЕПИСАННЫЙ ТЕКСТ (начни сразу с текста, без введения):"""
-
-def check_uniqueness(self, original: str, rewritten: str) -> float:
-    """
-    Оценивает уникальность переписанного текста (примерно)
     
-    Returns:
-        Процент различия (0-100)
-    """
-    # Простая оценка на основе различающихся слов
-    original_words = set(original.lower().split())
-    rewritten_words = set(rewritten.lower().split())
-    
-    if not original_words:
-        return 0.0
-    
-    different_words = rewritten_words - original_words
-    uniqueness = (len(different_words) / len(original_words)) * 100
-    
-    return min(uniqueness, 100.0)
-
-def enhance_with_cta(self, text: str) -> str:
-    """
-    Добавляет упоминание бренда если его нет (без CTA)
-    
-    Args:
-        text: Текст поста
+    def check_uniqueness(self, original: str, rewritten: str) -> float:
+        """
+        Оценивает уникальность переписанного текста (примерно)
         
-    Returns:
-        Текст с упоминанием
-    """
-    try:
-        prompt = f"""Добавь естественное упоминание "{Config.YOUR_BRAND_NAME}" в этот текст, если оно подходит по смыслу:
+        Returns:
+            Процент различия (0-100)
+        """
+        # Простая оценка на основе различающихся слов
+        original_words = set(original.lower().split())
+        rewritten_words = set(rewritten.lower().split())
+        
+        if not original_words:
+            return 0.0
+        
+        different_words = rewritten_words - original_words
+        uniqueness = (len(different_words) / len(original_words)) * 100
+        
+        return min(uniqueness, 100.0)
+    
+    def enhance_with_cta(self, text: str) -> str:
+        """
+        Добавляет упоминание бренда если его нет (без CTA)
+        
+        Args:
+            text: Текст поста
+            
+        Returns:
+            Текст с упоминанием
+        """
+        try:
+            prompt = f"""Добавь естественное упоминание "{Config.YOUR_BRAND_NAME}" в этот текст, если оно подходит по смыслу:
 
 ТЕКСТ:
 {text}
@@ -440,18 +440,18 @@ def enhance_with_cta(self, text: str) -> str:
 5. Естественно вписывается в текст.
 
 ТЕКСТ С УПОМИНАНИЕМ:"""
-        
-        result = self._generate_with_fallback(prompt, "", 0.5, 500)
-        
-        if result:
-            return result
-        else:
-            # Простое упоминание вручную, если подходит
-            return f"{text} (с {Config.YOUR_BRAND_NAME})" if "VPN" in text or "защита" in text else text
-        
-    except Exception as e:
-        logger.error(f"Ошибка при добавлении упоминания: {e}")
-        return text
+            
+            result = self._generate_with_fallback(prompt, "", 0.5, 500)
+            
+            if result:
+                return result
+            else:
+                # Простое упоминание вручную, если подходит
+                return f"{text} (с {Config.YOUR_BRAND_NAME})" if "VPN" in text or "защита" in text else text
+            
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении упоминания: {e}")
+            return text
 
 # Singleton instance
 _llm_client = None
